@@ -24,9 +24,6 @@ def train_epoch(data_loader, model, loss_fn, optimizer):
     model.train()
     train_loss, correct = 0, 0
     for batch, (X, y) in enumerate(data_loader):
-        # FIX: Do not cast to float if the model expects indices (DAN)
-        # We check if X is already integer-like (Long). If so, keep it.
-        # If it's not (like BOW floats), ensure it is float.
         if X.dtype != torch.long:
             X = X.float()
 
@@ -96,9 +93,6 @@ def main():
     # Parse the command-line arguments
     args = parser.parse_args()
 
-    # Load dataset
-    start_time = time.time()
-
     train_data = SentimentDatasetBOW("data/train.txt")
     dev_data = SentimentDatasetBOW("data/dev.txt", vectorizer=train_data.vectorizer, train=False)
     train_loader = DataLoader(train_data, batch_size=16, shuffle=True)
@@ -109,14 +103,11 @@ def main():
     print(f"Data loaded in : {elapsed_time} seconds")
 
 
-    # Check if the model type is "BOW"
     if args.model == "BOW":
-        # Train and evaluate NN2
         start_time = time.time()
         print('\n2 layers:')
         nn2_train_accuracy, nn2_test_accuracy = experiment(NN2BOW(input_size=512, hidden_size=100), train_loader, test_loader)
 
-        # Train and evaluate NN3
         print('\n3 layers:')
         nn3_train_accuracy, nn3_test_accuracy = experiment(NN3BOW(input_size=512, hidden_size=100), train_loader, test_loader)
 
@@ -154,39 +145,23 @@ def main():
     elif args.model == "DAN_RANDOM":
         print("Running Part 1b: Randomly Initialized Embeddings")
 
-        # 1. Load Data FIRST to build the vocabulary
-        # We pass 'None' for embeddings initially because we don't have GloVe
-        # NOTE: We need a way to get the vocab size.
-        # The cleanest way is to load the text, build an indexer, then init embeddings.
-        # But to save time, we can just reuse the GloVe indexer structure
-        # OR simply load the standard data and swap the embeddings.
-
-        # Strategy: Load GloVe just to get the 'WordEmbeddings' object for its Indexer
-        # (This ensures we use the exact same vocabulary mapping as Part 1a for fair comparison)
         print("Loading vocabulary...")
         glove_embeddings = read_word_embeddings("data/glove.6B.50d-relativized.txt")
         vocab_size = len(glove_embeddings.word_indexer)
 
-        # 2. Create the Random Embeddings wrapper
         random_embeddings = RandomEmbeddings(vocab_size=vocab_size, embedding_dim=50)
 
-        # 3. Load Datasets
-        # We pass glove_embeddings to the dataset so it knows how to turn words -> indices
         train_data = SentimentDatasetDAN("data/train.txt", glove_embeddings)
         dev_data = SentimentDatasetDAN("data/dev.txt", glove_embeddings)
 
         train_loader = DataLoader(train_data, batch_size=16, shuffle=True)
         test_loader = DataLoader(dev_data, batch_size=16, shuffle=False)
 
-        # 4. Initialize Model with Random Embeddings
-        # The DAN class will call random_embeddings.get_initialized_embedding_layer()
         print('\nTraining DAN (Random Init):')
         model = DAN(random_embeddings, hidden_size=100)
 
-        # 5. Run Experiment
         rand_train_acc, rand_dev_acc = experiment(model, train_loader, test_loader)
 
-        # 6. Plotting
         plt.figure(figsize=(8, 6))
         plt.plot(rand_train_acc, label='Train')
         plt.plot(rand_dev_acc, label='Dev')
@@ -200,16 +175,11 @@ def main():
         start_time = time.time()
         print("Loading DAN Data and Embeddings...")
 
-        # 1. Load Embeddings first
-        # Note: Ensure the path matches your actual file structure
-        # The PDF mentions 'data/glove.6B.50d-relativized.txt' or 300d
         word_embeddings = read_word_embeddings("data/glove.6B.50d-relativized.txt")
 
-        # 2. Load Data using SentimentDatasetDAN
         train_data = SentimentDatasetDAN("data/train.txt", word_embeddings)
         dev_data = SentimentDatasetDAN("data/dev.txt", word_embeddings)
 
-        # 3. Create DataLoaders
         train_loader = DataLoader(train_data, batch_size=16, shuffle=True)
         test_loader = DataLoader(dev_data, batch_size=16, shuffle=False)
 
@@ -217,15 +187,11 @@ def main():
         elapsed_time = end_time - start_time
         print(f"Data loaded in : {elapsed_time} seconds")
 
-        # 4. Initialize Model
         print('\nTraining DAN:')
-        # You can experiment with hidden_size (e.g., 100 or 300) [cite: 81]
         model = DAN(word_embeddings, hidden_size=100)
 
-        # 5. Run Experiment
         dan_train_acc, dan_dev_acc = experiment(model, train_loader, test_loader)
 
-        # 6. Plot Results
         plt.figure(figsize=(8, 6))
         plt.plot(dan_train_acc, label='Train')
         plt.plot(dan_dev_acc, label='Dev')
@@ -239,8 +205,7 @@ def main():
 
     elif args.model == "SUBWORDDAN":
         print("Training BPE...")
-        # 1. Train BPE on training data
-        vocab_size = 2000  # You can experiment with this [cite: 94]
+        vocab_size = 2000
         bpe = BPE(vocab_size=vocab_size)
         bpe.train("data/train.txt")
 
@@ -251,8 +216,6 @@ def main():
         train_loader = DataLoader(train_data, batch_size=16, shuffle=True)
         test_loader = DataLoader(dev_data, batch_size=16, shuffle=False)
 
-        # 2. Initialize Embeddings Randomly
-        # SubwordEmbeddings mimics the interface DAN expects
         subword_embeddings = SubwordEmbeddings(vocab_size=len(bpe.token_to_idx), embedding_dim=50)
 
         print('\nTraining Subword DAN:')
@@ -260,7 +223,6 @@ def main():
 
         subword_train_acc, subword_dev_acc = experiment(model, train_loader, test_loader)
 
-        # Plotting (same as before)
         plt.figure(figsize=(8, 6))
         plt.plot(subword_train_acc, label='Train')
         plt.plot(subword_dev_acc, label='Dev')

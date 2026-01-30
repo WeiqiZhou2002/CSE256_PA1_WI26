@@ -38,7 +38,6 @@ class BPE:
         """
         print(f"Training BPE with vocab size {self.vocab_size}...")
 
-        # 1. Initialize vocab with characters
         word_freqs = collections.defaultdict(int)
         with open(data_path, 'r', encoding='utf-8') as f:
             for line in f:
@@ -55,11 +54,6 @@ class BPE:
 
         self.vocab = word_freqs
 
-        # 2. Learn Merges
-        # Calculate how many merges we need to reach vocab_size
-        # Current indices: 0=PAD, 1=UNK. We need to fill up to vocab_size.
-        # Note: BPE usually counts *subwords* as the vocab.
-        # Here we just iterate purely on number of merges for simplicity.
         num_merges = self.vocab_size
 
         for i in range(num_merges):
@@ -101,17 +95,14 @@ class BPE:
         word_split = list(word) + ['</w>']
 
         while len(word_split) > 1:
-            # 1. Get all current adjacent pairs
             pairs = [(word_split[i], word_split[i + 1]) for i in range(len(word_split) - 1)]
 
-            # 2. Find the pair with the lowest rank (learned earliest)
-            # If no pair is in self.ranks, we are done
             best_pair = min(pairs, key=lambda p: self.ranks.get(p, float('inf')))
 
             if best_pair not in self.ranks:
                 break
 
-            # 3. Merge that pair in the word_split list
+            # Merge that pair in the word_split list
             new_split = []
             i = 0
             while i < len(word_split):
