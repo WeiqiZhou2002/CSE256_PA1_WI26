@@ -1,0 +1,229 @@
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{float}
+\usepackage{multicol}
+
+% Page layout settings
+\geometry{a4paper, margin=1in}
+
+\title{CSE 256 PA1: Deep Averaging Networks \& Word Embeddings}
+\author{Weiqi Zhou}
+\date{January 30, 2026}
+
+\begin{document}
+
+\maketitle
+
+\section*{Part 1: Deep Averaging Network (DAN)}
+
+\subsection*{1a) Implementation \& Results}
+
+\textbf{Methodology}\\
+The model architecture consists of the following components:
+
+\begin{enumerate}
+    \item \textbf{Embedding Layer:} I utilized the provided \texttt{WordEmbeddings} class to load pre-trained GloVe vectors (50-dimensional). The layer was initialized with \texttt{frozen=False} to allow fine-tuning of the embeddings during training.
+    \item \textbf{Averaging Mechanism:} The model computes the unweighted average of the word embeddings for the input sequence. Crucially, I implemented logic to ignore \texttt{PAD} tokens (index 0) during this calculation to ensure the average represents the actual sentence content regardless of padding length.
+    \item \textbf{Feedforward Network:} The averaged vector (dimension $d=50$) is passed through a feedforward neural network:
+    \begin{itemize}
+        \item \textbf{Layer 1:} Linear ($50 \rightarrow 100$) + ReLU Activation + Dropout ($p=0.3$).
+        \item \textbf{Layer 2:} Linear ($100 \rightarrow 100$) + ReLU Activation + Dropout ($p=0.3$).
+        \item \textbf{Output:} Linear ($100 \rightarrow 2$) + LogSoftmax.
+    \end{itemize}
+\end{enumerate}
+
+I used the \textbf{Adam optimizer} with a learning rate of $1e^{-4}$ and trained for up to 100 epochs with a batch size of 16.
+
+\textbf{Results}\\
+The DAN model demonstrated superior performance compared to the baseline Bag-of-Words (BOW) models provided in the assignment. The training progression is shown in Figure \ref{fig:dan_acc}.
+
+
+\begin{table}[H]
+    \centering
+    \begin{tabular}{lcc}
+        \toprule
+        \textbf{Model} & \textbf{Train Accuracy} & \textbf{Dev Accuracy} \\
+        \midrule
+        BOW (2-Layer) & $\sim0.97$ & $\sim0.73$ \\
+        \textbf{DAN (GloVe-50d)} & \textbf{$\sim1.00$} & \textbf{0.792} \\
+        \bottomrule
+    \end{tabular}
+    \caption{Performance comparison of BOW and DAN models.}
+\end{table}
+
+The DAN model achieved a development accuracy of \textbf{79.2\%}, satisfying the requirement of $>77\%$. This performance gain illustrates the advantage of using dense, pre-trained vector representations over discrete bag-of-words features.
+
+\begin{figure}[H]
+    \centering
+    % First Image (Left)
+    \begin{minipage}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{dan_accuracy.png}
+        \caption{DAN Accuracy (GloVe Init)}
+        \label{fig:dan_acc}
+    \end{minipage}\hfill
+    % Second Image (Right)
+    \begin{minipage}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{dan_random_accuracy.png}
+        \caption{DAN Accuracy (Random Init)}
+        \label{fig:dan_rand}
+    \end{minipage}
+\end{figure}
+
+\subsection*{1b) Randomly Initialized Embeddings}
+
+To assess the impact of transfer learning, I modified the DAN to initialize the embedding layer with random vectors instead of pre-trained GloVe vectors.
+
+\textbf{Results}\\
+The training progression for the randomly initialized model is shown in Figure \ref{fig:dan_rand}.
+
+
+\begin{table}[H]
+    \centering
+    \begin{tabular}{lcc}
+        \toprule
+        \textbf{Initialization} & \textbf{Dev Accuracy} & \textbf{Convergence} \\
+        \midrule
+        GloVe (Pre-trained) & \textbf{79.2\%} & Fast \\
+        Random & 74.5\% & Slower \\
+        \bottomrule
+    \end{tabular}
+    \caption{Effect of initialization on DAN performance.}
+\end{table}
+
+\textbf{Discussion}\\
+Initializing embeddings from scratch resulted in a significant drop in performance (from 79.2\% to 74.5\%). The pre-trained GloVe vectors capture rich semantic relationships (e.g., \textit{terrible} and \textit{awful} are close in vector space) learned from massive corpora. When initialized randomly, the model must learn these relationships solely from the small movie review training set. As seen in Figure \ref{fig:dan_rand}, the model fits the training data well (reaching near 100\% accuracy) but struggles to generalize to the development set, a classic sign of overfitting due to the lack of prior semantic knowledge.
+
+\section*{Part 2: Byte Pair Encoding (BPE)}
+
+\subsection*{2a) Subword-based DAN}
+
+\textbf{Implementation}\\
+I implemented the Byte Pair Encoding (BPE) algorithm to replace word-level tokenization with subword units.
+\begin{enumerate}
+    \item \textbf{Training:} The BPE algorithm was trained on \texttt{train.txt} to learn a merge table, treating words as sequences of characters and iteratively merging the most frequent adjacent pairs.
+    \item \textbf{Vocabulary:} I experimented with a vocabulary size of \textbf{2,000}.
+    \item \textbf{Model:} A DAN was trained using these subword indices. Since BPE tokens do not match GloVe vocabulary, embeddings were initialized randomly.
+\end{enumerate}
+
+\textbf{Results}\\
+The performance of the subword-based model is visualized in Figure \ref{fig:subword_acc}.
+
+\begin{table}[H]
+    \centering
+    \begin{tabular}{llcc}
+        \toprule
+        \textbf{Model} & \textbf{Tokenization} & \textbf{Initialization} & \textbf{Dev Accuracy} \\
+        \midrule
+        Standard DAN & Word-Level & GloVe & 79.2\% \\
+        \textbf{Subword DAN} & \textbf{BPE (Vocab=2000)} & \textbf{Random} & \textbf{72.2\%} \\
+        \bottomrule
+    \end{tabular}
+    \caption{Performance of Subword-based DAN.}
+\end{table}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.6\textwidth]{subword_dan_accuracy.png}
+    \caption{Training and Development Accuracy for the Subword DAN (Vocab=2000).}
+    \label{fig:subword_acc}
+\end{figure}
+
+
+
+\textbf{Discussion}\\
+The subword-based model underperformed the word-level GloVe model. This is expected for two reasons:
+\begin{enumerate}
+    \item \textbf{Cold Start:} As observed in Part 1b, random initialization puts the model at a massive disadvantage compared to GloVe. The model has to learn the sentiment of subwords like "un" or "happy" from scratch.
+    \item \textbf{The "Averaging" Limitation:} DANs rely on averaging vectors. While averaging full words works well, averaging subwords is semantically risky. For example, averaging the vectors for \textit{un-} + \textit{believ} + \textit{able} might result in a neutral vector if the negative prefix \textit{un-} cancels out the positive root \textit{believ}. Unlike LSTMs or Transformers, the DAN cannot capture the compositional order of these subwords.
+\end{enumerate}
+
+\section*{Part 3: Understanding Skip-Gram}
+
+\subsection*{Q1: The "The Dog" Corpus}
+\textbf{Training Data:} "the dog", "the cat", "a dog" (Window size $k=1$).
+
+\subsubsection*{3a) Optimal Probabilities}
+
+$$P(y=\text{"the"} \mid x=\text{"dog"}) = \frac{\text{Count}(\text{dog, the})}{\text{Total Contexts for dog}} = \frac{1}{2} = \mathbf{0.5}$$
+$$P(y=\text{"a"} \mid x=\text{"dog"}) = \frac{1}{2} = \mathbf{0.5}$$
+
+\subsubsection*{3b) Optimal Vector for "the"}
+Given fixed context vectors: $\vec{c}_{dog} = [0,1], \vec{c}_{cat} = [0,1], \vec{c}_{a} = [1,0], \vec{c}_{the} = [1,0]$.\\
+We need a word vector $\vec{v}_{the}$ that approximates the empirical distribution of "the".
+
+\begin{itemize}
+    \item Contexts of "the": "dog", "cat".
+    \item Target: High probability for "dog" and "cat", low probability for "a" and "the".
+\end{itemize}
+
+The probability is given by softmax: $P(y|x) \propto \exp(\vec{v}_x \cdot \vec{c}_y)$. Let $\vec{v}_{the} = [v_1, v_2]$.
+\begin{itemize}
+    \item Dot product with dog/cat: $[v_1, v_2] \cdot [0,1] = v_2$
+    \item Dot product with a/the: $[v_1, v_2] \cdot [1,0] = v_1$
+\end{itemize}
+
+To maximize probabilities for dog/cat, we need $v_2 \gg v_1$.
+\textbf{Proposed Vector:} $\vec{v}_{the} = [-10, 10]$.
+
+\textbf{Why it is optimal:}\\
+$$P(\text{dog}|\text{the}) = \frac{e^{10}}{e^{10} + e^{10} + e^{-10} + e^{-10}} \approx \frac{22026}{44052} \approx 0.5$$
+This perfectly matches the empirical probability of 0.5.
+
+\subsection*{Q2}
+\subsubsection*{3c) Training Examples}
+With window size $k=1$:
+\begin{multicols}{2}
+\begin{enumerate}
+    \item (the, dog)
+    \item (dog, the)
+    \item (the, cat)
+    \item (cat, the)
+    \item (a, dog)
+    \item (dog, a)
+    \item (a, cat)
+    \item (cat, a)
+\end{enumerate}
+\end{multicols}
+
+\subsubsection*{3d) Nearly Optimal Vectors ($d=2$)}
+We observe two distinct groups:
+\begin{enumerate}
+    \item \textbf{Determiners (the, a):} Only appear with Nouns.
+    \item \textbf{Nouns (dog, cat):} Only appear with Determiners.
+\end{enumerate}
+
+To maximize the dot products between these groups while minimizing dot products within groups, we can use orthogonal axes.
+
+\textbf{Proposed Vectors:}
+\begin{itemize}
+    \item \textbf{Determiner Words ($\vec{v}_{the}, \vec{v}_{a}$):} $[10, 0]$
+    \item \textbf{Noun Words ($\vec{v}_{dog}, \vec{v}_{cat}$):} $[0, 10]$
+    \item \textbf{Determiner Contexts ($\vec{c}_{the}, \vec{c}_{a}$):} $[0, 10]$ (To align with Noun words)
+    \item \textbf{Noun Contexts ($\vec{c}_{dog}, \vec{c}_{cat}$):} $[10, 0]$ (To align with Determiner words)
+\end{itemize}
+
+\textbf{Verification:}\\
+For pair ("the", "dog"):
+$$\vec{v}_{the} \cdot \vec{c}_{dog} = [10, 0] \cdot [10, 0] = 100 \implies \text{High Probability}$$
+For invalid pair ("the", "a"):
+$$\vec{v}_{the} \cdot \vec{c}_{a} = [10, 0] \cdot [0, 10] = 0 \implies \text{Low Probability}$$
+
+This configuration yields probabilities within 0.01 of the optimum.
+
+\section*{AI Contribution Statement}
+In the completion of this assignment, I utilized Google's Gemini AI as a programming and writing assistant. Gemini provided significant support in the following areas:
+\begin{itemize}
+    \item \textbf{Debugging:} Assisted in identifying and resolving runtime errors in the PyTorch implementation, specifically regarding tensor data type mismatches.
+    \item \textbf{Documentation:} Helped generate the structure and content of the \texttt{README.md} file to ensure clarity and completeness.
+    \item \textbf{Report Writing:} Assisted in drafting and refining the language used in this report to improve flow and grammatical accuracy.
+\end{itemize}
+
+\end{document}

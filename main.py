@@ -93,6 +93,7 @@ def main():
     # Parse the command-line arguments
     args = parser.parse_args()
 
+    start_time = time.time()
     train_data = SentimentDatasetBOW("data/train.txt")
     dev_data = SentimentDatasetBOW("data/dev.txt", vectorizer=train_data.vectorizer, train=False)
     train_loader = DataLoader(train_data, batch_size=16, shuffle=True)
